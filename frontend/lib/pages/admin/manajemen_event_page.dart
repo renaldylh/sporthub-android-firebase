@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../app_theme.dart';
 import '../../services/event_service.dart';
 import '../../services/upload_service.dart';
+import '../../services/event_registration_service.dart';
 
 class ManajemenEventPage extends StatefulWidget {
   const ManajemenEventPage({super.key});
@@ -13,6 +14,7 @@ class ManajemenEventPage extends StatefulWidget {
 class _ManajemenEventPageState extends State<ManajemenEventPage> {
   final EventService _eventService = EventService.instance;
   final UploadService _uploadService = UploadService.instance;
+  final EventRegistrationService _registrationService = EventRegistrationService.instance;
   List<EventModel> _events = [];
   bool _isLoading = true;
   String? _error;
@@ -325,8 +327,10 @@ class _ManajemenEventPageState extends State<ManajemenEventPage> {
                                           onSelected: (value) {
                                             if (value == 'edit') _showAddEditDialog(event: event);
                                             if (value == 'delete') _deleteEvent(event);
+                                            if (value == 'registrations') _showRegistrations(event);
                                           },
                                           itemBuilder: (ctx) => [
+                                            const PopupMenuItem(value: 'registrations', child: Text('Lihat Pendaftar')),
                                             const PopupMenuItem(value: 'edit', child: Text('Edit')),
                                             const PopupMenuItem(
                                               value: 'delete',
@@ -343,6 +347,82 @@ class _ManajemenEventPageState extends State<ManajemenEventPage> {
                     ),
                   ),
                 ),
+    );
+  }
+
+  void _showRegistrations(EventModel event) async {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("Pendaftar: ${event.title}"),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: FutureBuilder<List<EventRegistrationModel>>(
+            future: _registrationService.fetchByEvent(event.id),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const SizedBox(
+                  height: 100,
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              if (snapshot.hasError) {
+                return Text("Error: ${snapshot.error}");
+              }
+              final registrations = snapshot.data ?? [];
+              if (registrations.isEmpty) {
+                return const SizedBox(
+                  height: 100,
+                  child: Center(child: Text("Belum ada pendaftar")),
+                );
+              }
+              return SizedBox(
+                height: 300,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: registrations.length,
+                  itemBuilder: (context, index) {
+                    final reg = registrations[index];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: AppTheme.primaryColor.withOpacity(0.2),
+                        child: Text(
+                          (reg.userName ?? 'U')[0].toUpperCase(),
+                          style: const TextStyle(color: AppTheme.primaryColor),
+                        ),
+                      ),
+                      title: Text(reg.userName ?? 'Unknown'),
+                      subtitle: Text(reg.userEmail ?? ''),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: reg.status == 'registered'
+                              ? Colors.green.withOpacity(0.1)
+                              : Colors.grey.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          reg.status == 'registered' ? 'Terdaftar' : reg.status,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: reg.status == 'registered' ? Colors.green : Colors.grey,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Tutup"),
+          ),
+        ],
+      ),
     );
   }
 }

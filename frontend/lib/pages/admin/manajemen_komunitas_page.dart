@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../app_theme.dart';
 import '../../services/community_service.dart';
 import '../../services/upload_service.dart';
+import '../../services/community_membership_service.dart';
 
 class ManajemenKomunitasPage extends StatefulWidget {
   const ManajemenKomunitasPage({super.key});
@@ -13,6 +14,7 @@ class ManajemenKomunitasPage extends StatefulWidget {
 class _ManajemenKomunitasPageState extends State<ManajemenKomunitasPage> {
   final CommunityService _communityService = CommunityService.instance;
   final UploadService _uploadService = UploadService.instance;
+  final CommunityMembershipService _membershipService = CommunityMembershipService.instance;
   List<CommunityModel> _communities = [];
   bool _isLoading = true;
   String? _error;
@@ -296,8 +298,10 @@ class _ManajemenKomunitasPageState extends State<ManajemenKomunitasPage> {
                                           onSelected: (value) {
                                             if (value == 'edit') _showAddEditDialog(community: community);
                                             if (value == 'delete') _deleteCommunity(community);
+                                            if (value == 'members') _showMembers(community);
                                           },
                                           itemBuilder: (ctx) => [
+                                            const PopupMenuItem(value: 'members', child: Text('Lihat Anggota')),
                                             const PopupMenuItem(value: 'edit', child: Text('Edit')),
                                             const PopupMenuItem(value: 'delete', child: Text('Hapus', style: TextStyle(color: Colors.red))),
                                           ],
@@ -311,6 +315,82 @@ class _ManajemenKomunitasPageState extends State<ManajemenKomunitasPage> {
                     ),
                   ),
                 ),
+    );
+  }
+
+  void _showMembers(CommunityModel community) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("Anggota: ${community.name}"),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: FutureBuilder<List<CommunityMembershipModel>>(
+            future: _membershipService.fetchByCommunity(community.id),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const SizedBox(
+                  height: 100,
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              if (snapshot.hasError) {
+                return Text("Error: ${snapshot.error}");
+              }
+              final members = snapshot.data?.where((m) => m.status == 'active').toList() ?? [];
+              if (members.isEmpty) {
+                return const SizedBox(
+                  height: 100,
+                  child: Center(child: Text("Belum ada anggota")),
+                );
+              }
+              return SizedBox(
+                height: 300,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: members.length,
+                  itemBuilder: (context, index) {
+                    final member = members[index];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: AppTheme.primaryColor.withOpacity(0.2),
+                        child: Text(
+                          (member.userName ?? 'U')[0].toUpperCase(),
+                          style: const TextStyle(color: AppTheme.primaryColor),
+                        ),
+                      ),
+                      title: Text(member.userName ?? 'Unknown'),
+                      subtitle: Text(member.userEmail ?? ''),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: member.role == 'admin'
+                              ? Colors.orange.withOpacity(0.1)
+                              : Colors.green.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          member.role == 'admin' ? 'Admin' : 'Member',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: member.role == 'admin' ? Colors.orange : Colors.green,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Tutup"),
+          ),
+        ],
+      ),
     );
   }
 }

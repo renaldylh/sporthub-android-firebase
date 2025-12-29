@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../app_theme.dart';
 import '../../services/community_service.dart';
+import '../../services/community_membership_service.dart';
+import '../../services/auth_service.dart';
 
 class KomunitasPage extends StatefulWidget {
   const KomunitasPage({super.key});
@@ -11,6 +13,7 @@ class KomunitasPage extends StatefulWidget {
 
 class _KomunitasPageState extends State<KomunitasPage> {
   final CommunityService _communityService = CommunityService.instance;
+  final CommunityMembershipService _membershipService = CommunityMembershipService.instance;
   List<CommunityModel> _communities = [];
   bool _isLoading = true;
   String? _error;
@@ -221,14 +224,7 @@ class _KomunitasPageState extends State<KomunitasPage> {
                     SizedBox(
                       height: 32,
                       child: ElevatedButton(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text("Bergabung dengan ${community.name}"),
-                              backgroundColor: AppTheme.primaryColor,
-                            ),
-                          );
-                        },
+                        onPressed: () => _joinCommunity(community),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primaryColor,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -247,5 +243,70 @@ class _KomunitasPageState extends State<KomunitasPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _joinCommunity(CommunityModel community) async {
+    if (!AuthService.instance.isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Silakan login terlebih dahulu untuk bergabung"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Gabung Komunitas"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Apakah Anda ingin bergabung dengan:"),
+            const SizedBox(height: 8),
+            Text(
+              community.name,
+              style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryColor),
+            ),
+            const SizedBox(height: 4),
+            Text("${community.memberCount} anggota", style: const TextStyle(color: Colors.grey)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Batal"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
+            child: const Text("Gabung"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await _membershipService.join(community.id);
+      _loadCommunities(); // Reload to update member count
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Berhasil bergabung dengan ${community.name}!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Gagal: $e"), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 }

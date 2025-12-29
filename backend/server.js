@@ -21,6 +21,8 @@ const communityRoutes = require('./src/routes/communityRoutes');
 const venueRoutes = require('./src/routes/venueRoutes');
 const bookingRoutes = require('./src/routes/bookingRoutes');
 const eventRoutes = require('./src/routes/eventRoutes');
+const eventRegistrationRoutes = require('./src/routes/eventRegistrationRoutes');
+const communityMembershipRoutes = require('./src/routes/communityMembershipRoutes');
 
 const app = express();
 
@@ -114,6 +116,8 @@ app.use('/api/communities', communityRoutes);
 app.use('/api/venues', venueRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/event-registrations', eventRegistrationRoutes);
+app.use('/api/community-memberships', communityMembershipRoutes);
 
 // 404 handler
 app.use((req, res) => {

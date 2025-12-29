@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../app_theme.dart';
 import '../../services/event_service.dart';
+import '../../services/event_registration_service.dart';
+import '../../services/auth_service.dart';
 import 'user_main_page.dart';
 
 class EventPage extends StatefulWidget {
@@ -12,6 +14,7 @@ class EventPage extends StatefulWidget {
 
 class _EventPageState extends State<EventPage> {
   final EventService _eventService = EventService.instance;
+  final EventRegistrationService _registrationService = EventRegistrationService.instance;
   List<EventModel> _events = [];
   List<EventModel> _filteredEvents = [];
   bool _isLoading = true;
@@ -241,11 +244,7 @@ class _EventPageState extends State<EventPage> {
                   Align(
                     alignment: Alignment.centerRight,
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Pendaftaran event akan segera tersedia!")),
-                        );
-                      },
+                      onPressed: () => _registerEvent(event),
                       icon: const Icon(Icons.event_available_outlined, size: 18),
                       label: const Text("Daftar Sekarang"),
                       style: ElevatedButton.styleFrom(
@@ -264,5 +263,76 @@ class _EventPageState extends State<EventPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _registerEvent(EventModel event) async {
+    if (!AuthService.instance.isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Silakan login terlebih dahulu untuk mendaftar event"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Confirm dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Daftar Event"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Apakah Anda yakin ingin mendaftar ke event:"),
+            const SizedBox(height: 8),
+            Text(
+              event.title,
+              style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryColor),
+            ),
+            if (event.eventDate != null) ...[
+              const SizedBox(height: 4),
+              Text("Tanggal: ${event.eventDate!.split('T').first}"),
+            ],
+            if (event.location != null) ...[
+              const SizedBox(height: 4),
+              Text("Lokasi: ${event.location}"),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Batal"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
+            child: const Text("Daftar"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await _registrationService.register(event.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Berhasil mendaftar ke ${event.title}!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Gagal: $e"), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 }
