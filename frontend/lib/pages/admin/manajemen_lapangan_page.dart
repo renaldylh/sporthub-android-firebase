@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../../app_theme.dart';
 import '../../services/venue_service.dart';
 import '../../services/upload_service.dart';
@@ -65,16 +66,30 @@ class _ManajemenLapanganPageState extends State<ManajemenLapanganPage> {
                 // Image Picker
                 GestureDetector(
                   onTap: isUploading ? null : () async {
+                    debugPrint('[ManajemenLapangan] Starting image pick...');
                     try {
                       final file = await _uploadService.pickImage();
-                      if (file == null) return;
+                      if (file == null) {
+                        debugPrint('[ManajemenLapangan] No file selected');
+                        return;
+                      }
+                      debugPrint('[ManajemenLapangan] File selected: ${file.name}');
                       setDialogState(() => isUploading = true);
+                      
+                      debugPrint('[ManajemenLapangan] Starting upload...');
                       final url = await _uploadService.uploadImage(file);
+                      debugPrint('[ManajemenLapangan] Upload complete! URL: $url');
+                      
                       setDialogState(() {
                         imageUrl = url;
                         isUploading = false;
                       });
+                      
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Gambar berhasil diupload!"), backgroundColor: Colors.green),
+                      );
                     } catch (e) {
+                      debugPrint('[ManajemenLapangan] Upload error: $e');
                       setDialogState(() => isUploading = false);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text("Gagal upload: $e"), backgroundColor: Colors.red),
