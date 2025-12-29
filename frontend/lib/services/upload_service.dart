@@ -9,9 +9,9 @@ class UploadService {
 
   final ImagePicker _picker = ImagePicker();
   
-  // Cloudinary configuration - using demo account for unsigned uploads
-  static const String _cloudName = 'demo';
-  static const String _uploadUrl = 'https://api.cloudinary.com/v1_1/demo/image/upload';
+  // Freeimage.host API - completely free, no registration needed
+  static const String _apiKey = '6d207e02198a847aa98d0a2a901485a5';
+  static const String _uploadUrl = 'https://freeimage.host/api/1/upload';
 
   /// Pick image from gallery
   Future<XFile?> pickImage() async {
@@ -55,7 +55,7 @@ class UploadService {
     }
   }
 
-  /// Upload image to Cloudinary (free tier, reliable)
+  /// Upload image to Freeimage.host (free, no registration)
   Future<String> uploadImage(XFile file) async {
     debugPrint('[UploadService] ===== UPLOAD STARTED =====');
     debugPrint('[UploadService] File: ${file.name}');
@@ -68,17 +68,20 @@ class UploadService {
         throw Exception('File is empty');
       }
 
-      // Create base64 data URI for Cloudinary
-      final base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-      debugPrint('[UploadService] Base64 created, uploading to Cloudinary...');
+      // Convert to base64
+      final base64Image = base64Encode(bytes);
+      debugPrint('[UploadService] Base64 length: ${base64Image.length}');
 
-      // Upload to Cloudinary using unsigned upload
+      // Upload to Freeimage.host
+      debugPrint('[UploadService] Uploading to Freeimage.host...');
+      
       final response = await http.post(
         Uri.parse(_uploadUrl),
         body: {
-          'file': base64Image,
-          'upload_preset': 'ml_default',
-          'folder': 'sporthub',
+          'key': _apiKey,
+          'action': 'upload',
+          'source': base64Image,
+          'format': 'json',
         },
       ).timeout(
         const Duration(seconds: 60),
@@ -87,20 +90,24 @@ class UploadService {
         },
       );
 
-      debugPrint('[UploadService] Cloudinary status: ${response.statusCode}');
+      debugPrint('[UploadService] Response status: ${response.statusCode}');
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (data['secure_url'] != null) {
-          final imageUrl = data['secure_url'] as String;
+        debugPrint('[UploadService] Response success: ${data['status_code']}');
+        
+        if (data['status_code'] == 200 && data['image'] != null) {
+          final imageUrl = data['image']['url'] as String;
           debugPrint('[UploadService] ===== SUCCESS =====');
           debugPrint('[UploadService] URL: $imageUrl');
           return imageUrl;
+        } else {
+          final error = data['error']?['message'] ?? data['status_txt'] ?? 'Unknown error';
+          throw Exception('Freeimage error: $error');
         }
-        throw Exception('No URL in response');
       } else {
-        debugPrint('[UploadService] Error: ${response.body}');
-        throw Exception('Cloudinary error: ${response.statusCode}');
+        debugPrint('[UploadService] Error body: ${response.body}');
+        throw Exception('HTTP error: ${response.statusCode}');
       }
     } catch (e) {
       debugPrint('[UploadService] ===== FAILED =====');
