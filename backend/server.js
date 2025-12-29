@@ -87,12 +87,18 @@ app.get('/api/health', (_req, res) => {
 // Image upload endpoint (now using ImgBB)
 app.post('/api/upload', upload.single('image'), async (req, res) => {
   try {
+    console.log('[Upload] Request received');
+    console.log('[Upload] File:', req.file?.originalname, 'Size:', req.file?.size, 'bytes');
+
     if (!req.file) {
+      console.log('[Upload] No file in request');
       return res.status(400).json({ message: 'No image file provided' });
     }
 
     // Upload to ImgBB
     const result = await uploadImage(req.file.buffer, req.file.originalname);
+
+    console.log('[Upload] Success, URL:', result.url);
 
     res.json({
       message: 'Image uploaded successfully',
@@ -101,7 +107,8 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
       thumbnail: result.thumbnail,
     });
   } catch (error) {
-    console.error('Upload error:', error);
+    console.error('[Upload] Error:', error.message);
+    console.error('[Upload] Stack:', error.stack);
     res.status(500).json({ message: error.message });
   }
 });
