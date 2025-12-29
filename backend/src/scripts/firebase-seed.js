@@ -171,6 +171,58 @@ const seedCommunities = async () => {
     }
 };
 
+const seedEvents = async () => {
+    console.log('\n🌱 Seeding sample events...\n');
+    const now = new Date().toISOString();
+
+    // Create future dates
+    const futureDate1 = new Date();
+    futureDate1.setDate(futureDate1.getDate() + 7);
+    const futureDate2 = new Date();
+    futureDate2.setDate(futureDate2.getDate() + 14);
+    const futureDate3 = new Date();
+    futureDate3.setDate(futureDate3.getDate() + 21);
+
+    const events = [
+        {
+            title: 'Turnamen Futsal Antar Kecamatan',
+            description: 'Kompetisi futsal terbuka untuk semua kecamatan di Banyumas. Berhadiah total jutaan rupiah!',
+            eventDate: futureDate1.toISOString(),
+            location: 'Lapangan Futsal Purwokerto',
+            imageUrl: 'https://i.ibb.co/placeholder/futsal-tournament.jpg',
+            isActive: true,
+            createdAt: now,
+            updatedAt: now,
+        },
+        {
+            title: 'Fun Run Banyumas 5K',
+            description: 'Event lari untuk kesehatan bersama komunitas Banyumas Runners. Terbuka untuk umum!',
+            eventDate: futureDate2.toISOString(),
+            location: 'Alun-Alun Purwokerto',
+            imageUrl: 'https://i.ibb.co/placeholder/funrun.jpg',
+            isActive: true,
+            createdAt: now,
+            updatedAt: now,
+        },
+        {
+            title: 'Kejuaraan Badminton Banyumas Open',
+            description: 'Turnamen badminton tingkat kabupaten. Kategori tunggal dan ganda.',
+            eventDate: futureDate3.toISOString(),
+            location: 'GOR Satria Purwokerto',
+            imageUrl: 'https://i.ibb.co/placeholder/badminton-tournament.jpg',
+            isActive: true,
+            createdAt: now,
+            updatedAt: now,
+        },
+    ];
+
+    for (const event of events) {
+        const id = uuidv4();
+        await create('events', id, event);
+        console.log('✅ Event:', event.title);
+    }
+};
+
 const runSeeding = async () => {
     console.log('🔥 Firebase Seeding Started\n');
     console.log('='.repeat(50));
@@ -180,6 +232,7 @@ const runSeeding = async () => {
         await seedProducts();
         await seedVenues();
         await seedCommunities();
+        await seedEvents();
 
         console.log('\n' + '='.repeat(50));
         console.log('🎉 Seeding completed successfully!');
