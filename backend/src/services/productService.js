@@ -1,27 +1,27 @@
+/**
+ * Product Service - Firebase Realtime Database
+ */
+
 const { v4: uuidv4 } = require('uuid');
-const { query } = require('../config/database');
+const { getAll, getById, create, update, remove } = require('../config/firebase');
+
+const PRODUCTS_REF = 'products';
 
 /**
  * Get all products
  */
 const getProducts = async () => {
-  const [rows] = await query(
-    'SELECT * FROM products ORDER BY createdAt DESC'
-  );
-  return rows;
+  const products = await getAll(PRODUCTS_REF);
+  // Sort by createdAt DESC
+  products.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  return products;
 };
 
 /**
  * Get product by ID
  */
 const getProductById = async (productId) => {
-  const [rows] = await query(
-    'SELECT * FROM products WHERE id = ?',
-    [productId]
-  );
-
-  if (rows.length === 0) return null;
-  return rows[0];
+  return getById(PRODUCTS_REF, productId);
 };
 
 /**
@@ -31,13 +31,17 @@ const createProduct = async ({ name, price, stock, description, imageUrl }) => {
   const id = uuidv4();
   const now = new Date().toISOString();
 
-  await query(
-    `INSERT INTO products (id, name, price, stock, description, imageUrl, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, name, price, stock, description || null, imageUrl || null, now, now]
-  );
+  const productData = {
+    name,
+    price: Number(price),
+    stock: Number(stock) || 0,
+    description: description || null,
+    imageUrl: imageUrl || null,
+    createdAt: now,
+    updatedAt: now,
+  };
 
-  return { id, name, price, stock, description, imageUrl, createdAt: now, updatedAt: now };
+  return create(PRODUCTS_REF, id, productData);
 };
 
 /**
@@ -47,49 +51,22 @@ const updateProduct = async (productId, updates) => {
   const { name, price, stock, description, imageUrl } = updates;
   const now = new Date().toISOString();
 
-  // Build dynamic update query
-  const fields = [];
-  const values = [];
+  const updateData = { updatedAt: now };
 
-  if (name !== undefined) {
-    fields.push('name = ?');
-    values.push(name);
-  }
-  if (price !== undefined) {
-    fields.push('price = ?');
-    values.push(price);
-  }
-  if (stock !== undefined) {
-    fields.push('stock = ?');
-    values.push(stock);
-  }
-  if (description !== undefined) {
-    fields.push('description = ?');
-    values.push(description);
-  }
-  if (imageUrl !== undefined) {
-    fields.push('imageUrl = ?');
-    values.push(imageUrl);
-  }
+  if (name !== undefined) updateData.name = name;
+  if (price !== undefined) updateData.price = Number(price);
+  if (stock !== undefined) updateData.stock = Number(stock);
+  if (description !== undefined) updateData.description = description;
+  if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
 
-  fields.push('updatedAt = ?');
-  values.push(now);
-  values.push(productId);
-
-  await query(
-    `UPDATE products SET ${fields.join(', ')} WHERE id = ?`,
-    values
-  );
-
-  return getProductById(productId);
+  return update(PRODUCTS_REF, productId, updateData);
 };
 
 /**
  * Delete a product
  */
 const deleteProduct = async (productId) => {
-  await query('DELETE FROM products WHERE id = ?', [productId]);
-  return { success: true };
+  return remove(PRODUCTS_REF, productId);
 };
 
 module.exports = {

@@ -1,20 +1,27 @@
+/**
+ * Venue Service - Firebase Realtime Database
+ */
+
 const { v4: uuidv4 } = require('uuid');
-const { query } = require('../config/database');
+const { getAll, getById, create, update, remove } = require('../config/firebase');
+
+const VENUES_REF = 'venues';
 
 /**
  * Get all venues
  */
 const getVenues = async () => {
-    const [rows] = await query('SELECT * FROM venues ORDER BY createdAt DESC');
-    return rows;
+    const venues = await getAll(VENUES_REF);
+    // Sort by createdAt DESC
+    venues.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return venues;
 };
 
 /**
  * Get venue by ID
  */
 const getVenueById = async (id) => {
-    const [rows] = await query('SELECT * FROM venues WHERE id = ?', [id]);
-    return rows.length > 0 ? rows[0] : null;
+    return getById(VENUES_REF, id);
 };
 
 /**
@@ -24,65 +31,43 @@ const createVenue = async ({ name, type, pricePerHour, address, description, ima
     const id = uuidv4();
     const now = new Date().toISOString();
 
-    await query(
-        `INSERT INTO venues (id, name, type, pricePerHour, address, description, imageUrl, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, name, type, pricePerHour, address, description, imageUrl, now, now]
-    );
+    const venueData = {
+        name,
+        type,
+        pricePerHour: Number(pricePerHour),
+        address: address || null,
+        description: description || null,
+        imageUrl: imageUrl || null,
+        isAvailable: true,
+        createdAt: now,
+        updatedAt: now,
+    };
 
-    return getVenueById(id);
+    return create(VENUES_REF, id, venueData);
 };
 
 /**
  * Update venue
  */
 const updateVenue = async (id, updates) => {
-    const fields = [];
-    const values = [];
+    const updateData = { updatedAt: new Date().toISOString() };
 
-    if (updates.name !== undefined) {
-        fields.push('name = ?');
-        values.push(updates.name);
-    }
-    if (updates.type !== undefined) {
-        fields.push('type = ?');
-        values.push(updates.type);
-    }
-    if (updates.pricePerHour !== undefined) {
-        fields.push('pricePerHour = ?');
-        values.push(updates.pricePerHour);
-    }
-    if (updates.address !== undefined) {
-        fields.push('address = ?');
-        values.push(updates.address);
-    }
-    if (updates.description !== undefined) {
-        fields.push('description = ?');
-        values.push(updates.description);
-    }
-    if (updates.imageUrl !== undefined) {
-        fields.push('imageUrl = ?');
-        values.push(updates.imageUrl);
-    }
-    if (updates.isAvailable !== undefined) {
-        fields.push('isAvailable = ?');
-        values.push(updates.isAvailable);
-    }
+    if (updates.name !== undefined) updateData.name = updates.name;
+    if (updates.type !== undefined) updateData.type = updates.type;
+    if (updates.pricePerHour !== undefined) updateData.pricePerHour = Number(updates.pricePerHour);
+    if (updates.address !== undefined) updateData.address = updates.address;
+    if (updates.description !== undefined) updateData.description = updates.description;
+    if (updates.imageUrl !== undefined) updateData.imageUrl = updates.imageUrl;
+    if (updates.isAvailable !== undefined) updateData.isAvailable = updates.isAvailable;
 
-    if (fields.length === 0) return getVenueById(id);
-
-    values.push(id);
-    await query(`UPDATE venues SET ${fields.join(', ')} WHERE id = ?`, values);
-
-    return getVenueById(id);
+    return update(VENUES_REF, id, updateData);
 };
 
 /**
  * Delete venue
  */
 const deleteVenue = async (id) => {
-    await query('DELETE FROM venues WHERE id = ?', [id]);
-    return { success: true };
+    return remove(VENUES_REF, id);
 };
 
 module.exports = {

@@ -1,53 +1,59 @@
-const db = require('../config/database');
+/**
+ * Event Service - Firebase Realtime Database
+ */
+
 const { v4: uuidv4 } = require('uuid');
+const { getAll, getById, create, update, remove } = require('../config/firebase');
+
+const EVENTS_REF = 'events';
 
 class EventService {
     async findAll() {
-        const [rows] = await db.query(
-            'SELECT * FROM events ORDER BY eventDate ASC'
-        );
-        return rows;
+        const events = await getAll(EVENTS_REF);
+        // Sort by eventDate ASC
+        events.sort((a, b) => new Date(a.eventDate) - new Date(b.eventDate));
+        return events;
     }
 
     async findById(id) {
-        const [rows] = await db.query('SELECT * FROM events WHERE id = ?', [id]);
-        return rows[0];
+        return getById(EVENTS_REF, id);
     }
 
     async create(data) {
         const id = uuidv4();
         const { title, description, eventDate, location, imageUrl, isActive = true } = data;
+        const now = new Date().toISOString();
 
-        await db.query(
-            `INSERT INTO events (id, title, description, eventDate, location, imageUrl, isActive)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [id, title, description, eventDate, location, imageUrl, isActive]
-        );
+        const eventData = {
+            title,
+            description: description || null,
+            eventDate,
+            location: location || null,
+            imageUrl: imageUrl || null,
+            isActive,
+            createdAt: now,
+            updatedAt: now,
+        };
 
-        return this.findById(id);
+        return create(EVENTS_REF, id, eventData);
     }
 
     async update(id, data) {
         const { title, description, eventDate, location, imageUrl, isActive } = data;
+        const updateData = { updatedAt: new Date().toISOString() };
 
-        await db.query(
-            `UPDATE events SET 
-        title = COALESCE(?, title),
-        description = COALESCE(?, description),
-        eventDate = COALESCE(?, eventDate),
-        location = COALESCE(?, location),
-        imageUrl = COALESCE(?, imageUrl),
-        isActive = COALESCE(?, isActive),
-        updatedAt = NOW()
-      WHERE id = ?`,
-            [title, description, eventDate, location, imageUrl, isActive, id]
-        );
+        if (title !== undefined) updateData.title = title;
+        if (description !== undefined) updateData.description = description;
+        if (eventDate !== undefined) updateData.eventDate = eventDate;
+        if (location !== undefined) updateData.location = location;
+        if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+        if (isActive !== undefined) updateData.isActive = isActive;
 
-        return this.findById(id);
+        return update(EVENTS_REF, id, updateData);
     }
 
     async delete(id) {
-        await db.query('DELETE FROM events WHERE id = ?', [id]);
+        await remove(EVENTS_REF, id);
         return { deleted: true };
     }
 }

@@ -1,47 +1,70 @@
+/**
+ * Booking Service - Firebase Realtime Database
+ */
+
 const { v4: uuidv4 } = require('uuid');
-const { query } = require('../config/database');
+const { getAll, getById, create, update, remove, queryByChild } = require('../config/firebase');
+
+const BOOKINGS_REF = 'bookings';
+const VENUES_REF = 'venues';
+const USERS_REF = 'users';
+
+/**
+ * Enrich booking with venue and user data
+ */
+const enrichBooking = async (booking) => {
+    if (!booking) return null;
+
+    // Get venue data
+    const venue = await getById(VENUES_REF, booking.venueId);
+    // Get user data
+    const user = await getById(USERS_REF, booking.userId);
+
+    return {
+        ...booking,
+        venueName: venue?.name || null,
+        venueType: venue?.type || null,
+        venueAddress: venue?.address || null,
+        userName: user?.name || null,
+        userEmail: user?.email || null,
+    };
+};
 
 /**
  * Get all bookings (admin)
  */
 const getBookings = async () => {
-    const [rows] = await query(`
-    SELECT b.*, v.name as venueName, v.type as venueType, u.name as userName, u.email as userEmail
-    FROM bookings b
-    LEFT JOIN venues v ON b.venueId = v.id
-    LEFT JOIN users u ON b.userId = u.id
-    ORDER BY b.createdAt DESC
-  `);
-    return rows;
+    const bookings = await getAll(BOOKINGS_REF);
+    // Sort by createdAt DESC
+    bookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    // Enrich with venue and user data
+    return Promise.all(bookings.map(enrichBooking));
 };
 
 /**
  * Get bookings by user
  */
 const getBookingsByUser = async (userId) => {
-    const [rows] = await query(`
-    SELECT b.*, v.name as venueName, v.type as venueType
-    FROM bookings b
-    LEFT JOIN venues v ON b.venueId = v.id
-    WHERE b.userId = ?
-    ORDER BY b.createdAt DESC
-  `, [userId]);
-    return rows;
+    const bookings = await queryByChild(BOOKINGS_REF, 'userId', userId);
+    // Sort by createdAt DESC
+    bookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    // Enrich with venue data only
+    return Promise.all(bookings.map(async (booking) => {
+        const venue = await getById(VENUES_REF, booking.venueId);
+        return {
+            ...booking,
+            venueName: venue?.name || null,
+            venueType: venue?.type || null,
+        };
+    }));
 };
 
 /**
  * Get booking by ID
  */
 const getBookingById = async (id) => {
-    const [rows] = await query(`
-    SELECT b.*, v.name as venueName, v.type as venueType, v.address as venueAddress,
-           u.name as userName, u.email as userEmail
-    FROM bookings b
-    LEFT JOIN venues v ON b.venueId = v.id
-    LEFT JOIN users u ON b.userId = u.id
-    WHERE b.id = ?
-  `, [id]);
-    return rows.length > 0 ? rows[0] : null;
+    const booking = await getById(BOOKINGS_REF, id);
+    return enrichBooking(booking);
 };
 
 /**
@@ -51,12 +74,21 @@ const createBooking = async ({ venueId, userId, bookingDate, startTime, endTime,
     const id = uuidv4();
     const now = new Date().toISOString();
 
-    await query(
-        `INSERT INTO bookings (id, venueId, userId, bookingDate, startTime, endTime, totalPrice, notes, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, venueId, userId, bookingDate, startTime, endTime, totalPrice, notes, now, now]
-    );
+    const bookingData = {
+        venueId,
+        userId,
+        bookingDate,
+        startTime,
+        endTime,
+        totalPrice: Number(totalPrice),
+        status: 'pending',
+        notes: notes || null,
+        adminNotes: null,
+        createdAt: now,
+        updatedAt: now,
+    };
 
+    await create(BOOKINGS_REF, id, bookingData);
     return getBookingById(id);
 };
 
@@ -64,17 +96,16 @@ const createBooking = async ({ venueId, userId, bookingDate, startTime, endTime,
  * Update booking status (approve/reject)
  */
 const updateBookingStatus = async (id, status, adminNotes = null) => {
-    const updates = ['status = ?'];
-    const values = [status];
+    const updateData = {
+        status,
+        updatedAt: new Date().toISOString(),
+    };
 
     if (adminNotes) {
-        updates.push('adminNotes = ?');
-        values.push(adminNotes);
+        updateData.adminNotes = adminNotes;
     }
 
-    values.push(id);
-    await query(`UPDATE bookings SET ${updates.join(', ')} WHERE id = ?`, values);
-
+    await update(BOOKINGS_REF, id, updateData);
     return getBookingById(id);
 };
 
@@ -82,7 +113,7 @@ const updateBookingStatus = async (id, status, adminNotes = null) => {
  * Cancel booking (by user)
  */
 const cancelBooking = async (id, userId) => {
-    const booking = await getBookingById(id);
+    const booking = await getById(BOOKINGS_REF, id);
 
     if (!booking) {
         throw new Error('Booking not found');
@@ -96,7 +127,7 @@ const cancelBooking = async (id, userId) => {
         throw new Error('Only pending bookings can be cancelled');
     }
 
-    await query('UPDATE bookings SET status = ? WHERE id = ?', ['cancelled', id]);
+    await update(BOOKINGS_REF, id, { status: 'cancelled', updatedAt: new Date().toISOString() });
     return getBookingById(id);
 };
 
@@ -104,16 +135,15 @@ const cancelBooking = async (id, userId) => {
  * Delete booking (admin)
  */
 const deleteBooking = async (id) => {
-    await query('DELETE FROM bookings WHERE id = ?', [id]);
-    return { success: true };
+    return remove(BOOKINGS_REF, id);
 };
 
 /**
  * Get pending bookings count
  */
 const getPendingBookingsCount = async () => {
-    const [rows] = await query("SELECT COUNT(*) as count FROM bookings WHERE status = 'pending'");
-    return rows[0].count;
+    const bookings = await queryByChild(BOOKINGS_REF, 'status', 'pending');
+    return bookings.length;
 };
 
 module.exports = {

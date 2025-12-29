@@ -1,20 +1,27 @@
+/**
+ * Community Service - Firebase Realtime Database
+ */
+
 const { v4: uuidv4 } = require('uuid');
-const { query } = require('../config/database');
+const { getAll, getById, create, update, remove } = require('../config/firebase');
+
+const COMMUNITIES_REF = 'communities';
 
 /**
  * Get all communities
  */
 const getCommunities = async () => {
-    const [rows] = await query('SELECT * FROM communities ORDER BY createdAt DESC');
-    return rows;
+    const communities = await getAll(COMMUNITIES_REF);
+    // Sort by createdAt DESC
+    communities.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return communities;
 };
 
 /**
  * Get community by ID
  */
 const getCommunityById = async (id) => {
-    const [rows] = await query('SELECT * FROM communities WHERE id = ?', [id]);
-    return rows.length > 0 ? rows[0] : null;
+    return getById(COMMUNITIES_REF, id);
 };
 
 /**
@@ -24,61 +31,41 @@ const createCommunity = async ({ name, description, category, imageUrl }) => {
     const id = uuidv4();
     const now = new Date().toISOString();
 
-    await query(
-        `INSERT INTO communities (id, name, description, category, imageUrl, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [id, name, description, category, imageUrl, now, now]
-    );
+    const communityData = {
+        name,
+        description: description || null,
+        category: category || null,
+        imageUrl: imageUrl || null,
+        memberCount: 0,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+    };
 
-    return getCommunityById(id);
+    return create(COMMUNITIES_REF, id, communityData);
 };
 
 /**
  * Update community
  */
 const updateCommunity = async (id, updates) => {
-    const fields = [];
-    const values = [];
+    const updateData = { updatedAt: new Date().toISOString() };
 
-    if (updates.name !== undefined) {
-        fields.push('name = ?');
-        values.push(updates.name);
-    }
-    if (updates.description !== undefined) {
-        fields.push('description = ?');
-        values.push(updates.description);
-    }
-    if (updates.category !== undefined) {
-        fields.push('category = ?');
-        values.push(updates.category);
-    }
-    if (updates.imageUrl !== undefined) {
-        fields.push('imageUrl = ?');
-        values.push(updates.imageUrl);
-    }
-    if (updates.memberCount !== undefined) {
-        fields.push('memberCount = ?');
-        values.push(updates.memberCount);
-    }
-    if (updates.isActive !== undefined) {
-        fields.push('isActive = ?');
-        values.push(updates.isActive);
-    }
+    if (updates.name !== undefined) updateData.name = updates.name;
+    if (updates.description !== undefined) updateData.description = updates.description;
+    if (updates.category !== undefined) updateData.category = updates.category;
+    if (updates.imageUrl !== undefined) updateData.imageUrl = updates.imageUrl;
+    if (updates.memberCount !== undefined) updateData.memberCount = Number(updates.memberCount);
+    if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
 
-    if (fields.length === 0) return getCommunityById(id);
-
-    values.push(id);
-    await query(`UPDATE communities SET ${fields.join(', ')} WHERE id = ?`, values);
-
-    return getCommunityById(id);
+    return update(COMMUNITIES_REF, id, updateData);
 };
 
 /**
  * Delete community
  */
 const deleteCommunity = async (id) => {
-    await query('DELETE FROM communities WHERE id = ?', [id]);
-    return { success: true };
+    return remove(COMMUNITIES_REF, id);
 };
 
 module.exports = {

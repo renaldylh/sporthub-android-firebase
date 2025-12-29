@@ -3,13 +3,15 @@ const cors = require('cors');
 const path = require('path');
 const dotenv = require('dotenv');
 const multer = require('multer');
-const { v4: uuidv4 } = require('uuid');
-const fs = require('fs');
 
 // Load environment variables
 dotenv.config();
 
-const { initializeDatabase } = require('./src/config/database');
+// Firebase initialization (replaces MySQL)
+const { initializeDatabase } = require('./src/config/firebase');
+const { uploadImage } = require('./src/config/imgbb');
+
+// Routes
 const authRoutes = require('./src/routes/authRoutes');
 const productRoutes = require('./src/routes/productRoutes');
 const orderRoutes = require('./src/routes/orderRoutes');
@@ -22,23 +24,8 @@ const eventRoutes = require('./src/routes/eventRoutes');
 
 const app = express();
 
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-// Configure multer for image uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const filename = `${uuidv4()}${ext}`;
-    cb(null, filename);
-  },
-});
+// Configure multer for memory storage (for ImgBB upload)
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -63,15 +50,14 @@ const upload = multer({
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Serve static files (uploaded images)
-app.use('/uploads', express.static(uploadsDir));
-
 // Root route - API Welcome
 app.get('/', (_req, res) => {
   res.json({
     name: 'Banyumas SportHub API',
-    version: '1.0.0',
+    version: '2.0.0',
     status: 'running',
+    database: 'Firebase Realtime Database',
+    imageStorage: 'ImgBB',
     endpoints: {
       health: 'GET /api/health',
       upload: 'POST /api/upload',
@@ -91,24 +77,29 @@ app.get('/', (_req, res) => {
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
-    message: 'Banyumas SportHub API is running',
+    message: 'Banyumas SportHub API is running with Firebase',
     timestamp: new Date().toISOString(),
   });
 });
 
-// Image upload endpoint
-app.post('/api/upload', upload.single('image'), (req, res) => {
+// Image upload endpoint (now using ImgBB)
+app.post('/api/upload', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No image file provided' });
     }
-    const imageUrl = `/uploads/${req.file.filename}`;
+
+    // Upload to ImgBB
+    const result = await uploadImage(req.file.buffer, req.file.originalname);
+
     res.json({
       message: 'Image uploaded successfully',
-      imageUrl,
-      fullUrl: `${req.protocol}://${req.get('host')}${imageUrl}`,
+      imageUrl: result.url,
+      displayUrl: result.displayUrl,
+      thumbnail: result.thumbnail,
     });
   } catch (error) {
+    console.error('Upload error:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -144,17 +135,21 @@ app.use((err, _req, res, _next) => {
 // Start server
 const startServer = async () => {
   try {
-    // Initialize database tables
+    // Initialize Firebase connection
     await initializeDatabase();
-    console.log('✅ Database connected and initialized');
+    console.log('✅ Firebase Realtime Database connected');
 
     const port = process.env.PORT || 5000;
     app.listen(port, () => {
       console.log(`🚀 Banyumas SportHub API listening on http://localhost:${port}`);
       console.log(`📋 Health check: http://localhost:${port}/api/health`);
+      console.log(`🔥 Using Firebase Realtime Database`);
+      console.log(`🖼️  Using ImgBB for image storage`);
     });
   } catch (error) {
-    console.error('❌ Failed to start server:', error.message);
+    console.error('❌ Failed to start server:');
+    console.error('   Error:', error.message);
+    console.error('   Stack:', error.stack);
     process.exit(1);
   }
 };

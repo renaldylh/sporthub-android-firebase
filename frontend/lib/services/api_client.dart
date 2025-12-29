@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'settings_service.dart';
 
 class ApiException implements Exception {
   final String message;
@@ -18,17 +19,55 @@ class ApiClient {
 
   static final ApiClient instance = ApiClient._();
 
-  static const String _defaultUrl = kIsWeb 
-      ? 'http://localhost:5000/api' 
-      : 'http://10.0.2.2:5000/api';
+  // Default URLs for different platforms
+  static const String _defaultEmulatorUrl = 'http://10.0.2.2:5000/api';
+  static const String _defaultWebUrl = 'http://localhost:5000/api';
 
-  final String baseUrl =
-      const String.fromEnvironment('API_BASE_URL', defaultValue: _defaultUrl);
-
+  String _baseUrl = kIsWeb ? _defaultWebUrl : _defaultEmulatorUrl;
   String? _token;
+  bool _initialized = false;
+
+  /// Get current base URL
+  String get baseUrl => _baseUrl;
 
   /// Get current token (read-only)
   String? get token => _token;
+
+  /// Initialize API client with saved settings
+  Future<void> init() async {
+    if (_initialized) return;
+    
+    try {
+      final savedUrl = await SettingsService.instance.getBackendUrl();
+      _baseUrl = savedUrl;
+      _initialized = true;
+      if (kDebugMode) {
+        print("[ApiClient] Initialized with baseUrl: $_baseUrl");
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print("[ApiClient] Failed to load settings, using default: $_baseUrl");
+      }
+    }
+  }
+
+  /// Update base URL and save to settings
+  Future<void> updateBaseUrl(String url) async {
+    await SettingsService.instance.setBackendUrl(url);
+    _baseUrl = await SettingsService.instance.getBackendUrl();
+    if (kDebugMode) {
+      print("[ApiClient] Base URL updated to: $_baseUrl");
+    }
+  }
+
+  /// Reset to default URL
+  Future<void> resetBaseUrl() async {
+    await SettingsService.instance.resetBackendUrl();
+    _baseUrl = kIsWeb ? _defaultWebUrl : _defaultEmulatorUrl;
+    if (kDebugMode) {
+      print("[ApiClient] Base URL reset to default: $_baseUrl");
+    }
+  }
 
   void updateToken(String? token) {
     if (kDebugMode) {
@@ -56,7 +95,8 @@ class ApiClient {
   }
 
   Future<dynamic> get(String path) async {
-    final uri = Uri.parse('$baseUrl$path');
+    await init();
+    final uri = Uri.parse('$_baseUrl$path');
     if (kDebugMode) print("[ApiClient] GET $uri");
     
     final response = await http.get(uri, headers: _buildHeaders());
@@ -64,7 +104,8 @@ class ApiClient {
   }
 
   Future<dynamic> post(String path, Map<String, dynamic> body) async {
-    final uri = Uri.parse('$baseUrl$path');
+    await init();
+    final uri = Uri.parse('$_baseUrl$path');
     if (kDebugMode) print("[ApiClient] POST $uri");
 
     final response = await http.post(
@@ -76,7 +117,8 @@ class ApiClient {
   }
 
   Future<dynamic> put(String path, Map<String, dynamic> body) async {
-    final uri = Uri.parse('$baseUrl$path');
+    await init();
+    final uri = Uri.parse('$_baseUrl$path');
     if (kDebugMode) print("[ApiClient] PUT $uri");
 
     final response = await http.put(
@@ -88,7 +130,8 @@ class ApiClient {
   }
 
   Future<dynamic> patch(String path, Map<String, dynamic> body) async {
-    final uri = Uri.parse('$baseUrl$path');
+    await init();
+    final uri = Uri.parse('$_baseUrl$path');
     if (kDebugMode) print("[ApiClient] PATCH $uri");
 
     final response = await http.patch(
@@ -100,7 +143,8 @@ class ApiClient {
   }
 
   Future<dynamic> delete(String path) async {
-    final uri = Uri.parse('$baseUrl$path');
+    await init();
+    final uri = Uri.parse('$_baseUrl$path');
     if (kDebugMode) print("[ApiClient] DELETE $uri");
 
     final response = await http.delete(uri, headers: _buildHeaders());
@@ -131,5 +175,22 @@ class ApiClient {
     }
 
     throw ApiException(message, statusCode: status);
+  }
+
+  /// Test connection to backend
+  Future<bool> testConnection([String? testUrl]) async {
+    try {
+      final url = testUrl ?? _baseUrl;
+      final healthUrl = url.replaceAll('/api', '/api/health');
+      final response = await http.get(Uri.parse(healthUrl)).timeout(
+        const Duration(seconds: 5),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      if (kDebugMode) {
+        print("[ApiClient] Connection test failed: $e");
+      }
+      return false;
+    }
   }
 }

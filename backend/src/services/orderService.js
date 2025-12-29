@@ -1,5 +1,11 @@
+/**
+ * Order Service - Firebase Realtime Database
+ */
+
 const { v4: uuidv4 } = require('uuid');
-const { query, getConnection } = require('../config/database');
+const { db, getAll, getById, create, update, queryByChild } = require('../config/firebase');
+
+const ORDERS_REF = 'orders';
 
 /**
  * Create a new order with items (10 hour expiry for payment)
@@ -12,83 +18,34 @@ const createOrder = async ({
   status = 'pending',
   paymentMethod = 'manual-transfer',
 }) => {
-  const connection = await getConnection();
+  const orderId = uuidv4();
+  const now = new Date();
+  // Set expiry to 10 hours from now
+  const expiresAt = new Date(now.getTime() + 10 * 60 * 60 * 1000);
 
-  try {
-    await connection.beginTransaction();
-
-    const orderId = uuidv4();
-    const now = new Date();
-    // Set expiry to 10 hours from now
-    const expiresAt = new Date(now.getTime() + 10 * 60 * 60 * 1000);
-
-    // Insert order
-    await connection.execute(
-      `INSERT INTO orders (id, userId, totalAmount, status, paymentMethod, shippingAddress, expiresAt, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [orderId, userId, totalAmount, status, paymentMethod, shippingAddress || null, expiresAt, now, now]
-    );
-
-    // Insert order items
-    for (const item of items) {
-      await connection.execute(
-        `INSERT INTO order_items (orderId, productId, name, price, quantity)
-         VALUES (?, ?, ?, ?, ?)`,
-        [orderId, item.productId || null, item.name, item.price, item.quantity]
-      );
-    }
-
-    await connection.commit();
-
-    return {
-      id: orderId,
-      userId,
-      items,
-      totalAmount,
-      status,
-      paymentMethod,
-      shippingAddress,
-      expiresAt: expiresAt.toISOString(),
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString(),
-    };
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
-};
-
-/**
- * Get order with its items
- */
-const getOrderWithItems = async (orderRow) => {
-  if (!orderRow) return null;
-
-  const [items] = await query(
-    'SELECT productId, name, price, quantity FROM order_items WHERE orderId = ?',
-    [orderRow.id]
-  );
-
-  return {
-    ...orderRow,
-    items,
+  const orderData = {
+    userId,
+    items, // Items stored as nested array
+    totalAmount: Number(totalAmount),
+    status,
+    paymentMethod,
+    shippingAddress: shippingAddress || null,
+    paymentProof: null,
+    expiresAt: expiresAt.toISOString(),
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
   };
+
+  return create(ORDERS_REF, orderId, orderData);
 };
 
 /**
  * Get all orders (admin)
  */
 const getOrders = async () => {
-  const [rows] = await query(
-    'SELECT * FROM orders ORDER BY createdAt DESC'
-  );
-
-  const orders = await Promise.all(
-    rows.map((row) => getOrderWithItems(row))
-  );
-
+  const orders = await getAll(ORDERS_REF);
+  // Sort by createdAt DESC
+  orders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   return orders;
 };
 
@@ -96,15 +53,9 @@ const getOrders = async () => {
  * Get orders by user ID
  */
 const getOrdersByUser = async (userId) => {
-  const [rows] = await query(
-    'SELECT * FROM orders WHERE userId = ? ORDER BY createdAt DESC',
-    [userId]
-  );
-
-  const orders = await Promise.all(
-    rows.map((row) => getOrderWithItems(row))
-  );
-
+  const orders = await queryByChild(ORDERS_REF, 'userId', userId);
+  // Sort by createdAt DESC
+  orders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   return orders;
 };
 
@@ -112,13 +63,7 @@ const getOrdersByUser = async (userId) => {
  * Get order by ID
  */
 const getOrderById = async (orderId) => {
-  const [rows] = await query(
-    'SELECT * FROM orders WHERE id = ?',
-    [orderId]
-  );
-
-  if (rows.length === 0) return null;
-  return getOrderWithItems(rows[0]);
+  return getById(ORDERS_REF, orderId);
 };
 
 /**
@@ -126,13 +71,7 @@ const getOrderById = async (orderId) => {
  */
 const updateOrderStatus = async (orderId, status) => {
   const now = new Date().toISOString();
-
-  await query(
-    'UPDATE orders SET status = ?, updatedAt = ? WHERE id = ?',
-    [status, now, orderId]
-  );
-
-  return getOrderById(orderId);
+  return update(ORDERS_REF, orderId, { status, updatedAt: now });
 };
 
 /**
@@ -140,13 +79,11 @@ const updateOrderStatus = async (orderId, status) => {
  */
 const uploadPaymentProof = async (orderId, paymentProofUrl) => {
   const now = new Date().toISOString();
-
-  await query(
-    'UPDATE orders SET paymentProof = ?, status = ?, updatedAt = ? WHERE id = ?',
-    [paymentProofUrl, 'paid', now, orderId]
-  );
-
-  return getOrderById(orderId);
+  return update(ORDERS_REF, orderId, {
+    paymentProof: paymentProofUrl,
+    status: 'paid',
+    updatedAt: now,
+  });
 };
 
 /**
@@ -154,12 +91,17 @@ const uploadPaymentProof = async (orderId, paymentProofUrl) => {
  */
 const expireOldOrders = async () => {
   const now = new Date().toISOString();
+  const orders = await getAll(ORDERS_REF);
 
-  await query(
-    `UPDATE orders SET status = 'expired', updatedAt = ? 
-     WHERE status = 'pending' AND expiresAt < ?`,
-    [now, now]
+  const expiredOrders = orders.filter(
+    (order) => order.status === 'pending' && order.expiresAt < now
   );
+
+  for (const order of expiredOrders) {
+    await update(ORDERS_REF, order.id, { status: 'expired', updatedAt: now });
+  }
+
+  return expiredOrders.length;
 };
 
 module.exports = {
