@@ -392,11 +392,46 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             ),
                           ],
                         ),
-                        if (_paymentProofUrl != null) ...[
+                        if (_paymentProofUrl != null) ...[ 
                           const SizedBox(height: 12),
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: Image.network(_paymentProofUrl!, height: 150, fit: BoxFit.cover),
+                            child: Image.network(
+                              _paymentProofUrl!, 
+                              height: 150, 
+                              fit: BoxFit.cover,
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Container(
+                                  height: 150,
+                                  color: Colors.grey[200],
+                                  child: const Center(child: CircularProgressIndicator()),
+                                );
+                              },
+                              errorBuilder: (context, error, stackTrace) {
+                                debugPrint('[CheckoutPage] Image error: $error');
+                                debugPrint('[CheckoutPage] URL: $_paymentProofUrl');
+                                return Container(
+                                  height: 150,
+                                  color: Colors.grey[200],
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.broken_image, size: 40, color: Colors.grey),
+                                      const SizedBox(height: 8),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                                        child: Text(
+                                          'Gagal memuat gambar\n${_paymentProofUrl!.substring(0, _paymentProofUrl!.length > 50 ? 50 : _paymentProofUrl!.length)}...',
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                         ],
                       ],
