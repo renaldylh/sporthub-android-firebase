@@ -9,7 +9,7 @@ dotenv.config();
 
 // Firebase initialization (replaces MySQL)
 const { initializeDatabase } = require('./src/config/firebase');
-const { uploadImage } = require('./src/config/imgbb');
+const { uploadImage } = require('./src/config/cloudinary');
 
 // Routes
 const authRoutes = require('./src/routes/authRoutes');
