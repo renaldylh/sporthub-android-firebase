@@ -248,11 +248,42 @@ class _ManajemenSewaPageState extends State<ManajemenSewaPage> {
                                                         fontSize: 16,
                                                       ),
                                                     ),
-                                                    const SizedBox(height: 4),
-                                                    Text(
-                                                      booking.userName ?? 'Unknown User',
-                                                      style: TextStyle(color: Colors.grey[600]),
+                                                    if (booking.venueType != null)
+                                                      Text(
+                                                        booking.venueType!,
+                                                        style: TextStyle(
+                                                          color: Colors.grey[500],
+                                                          fontSize: 12,
+                                                        ),
+                                                      ),
+                                                    const SizedBox(height: 6),
+                                                    Row(
+                                                      children: [
+                                                        Icon(Icons.person, size: 14, color: Colors.grey[600]),
+                                                        const SizedBox(width: 4),
+                                                        Text(
+                                                          booking.userName ?? 'Unknown User',
+                                                          style: TextStyle(
+                                                            color: Colors.grey[700],
+                                                            fontWeight: FontWeight.w500,
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
+                                                    if (booking.userEmail != null)
+                                                      Row(
+                                                        children: [
+                                                          Icon(Icons.email, size: 14, color: Colors.grey[600]),
+                                                          const SizedBox(width: 4),
+                                                          Text(
+                                                            booking.userEmail!,
+                                                            style: TextStyle(
+                                                              color: Colors.grey[500],
+                                                              fontSize: 12,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
                                                   ],
                                                 ),
                                               ),
