@@ -90,7 +90,12 @@ class UploadService {
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
-      return '$baseUrl${data['imageUrl']}';
+      // ImgBB mengembalikan URL lengkap, langsung gunakan
+      final imageUrl = data['imageUrl'] as String;
+      if (kDebugMode) {
+        print('[UploadService] Upload success: $imageUrl');
+      }
+      return imageUrl;
     } else {
       throw Exception('Failed to upload image: ${response.body}');
     }

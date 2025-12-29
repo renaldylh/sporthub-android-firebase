@@ -4,9 +4,11 @@ import '../../services/auth_service.dart';
 import '../../services/user_service.dart';
 import '../login/role_selection_page.dart';
 import 'marketplace/pesanan_saya_page.dart';
+import 'booking_saya_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -85,6 +87,16 @@ class _ProfilePageState extends State<ProfilePage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const PesananSayaPage()),
+                );
+              },
+            ),
+            _buildProfileOption(
+              icon: Icons.sports_soccer,
+              title: "Booking Lapangan Saya",
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const BookingSayaPage()),
                 );
               },
             ),
