@@ -5,6 +5,8 @@ import '../../services/user_service.dart';
 import '../login/role_selection_page.dart';
 import 'marketplace/pesanan_saya_page.dart';
 import 'booking_saya_page.dart';
+import 'event_saya_page.dart';
+import 'komunitas_saya_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -97,6 +99,26 @@ class _ProfilePageState extends State<ProfilePage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const BookingSayaPage()),
+                );
+              },
+            ),
+            _buildProfileOption(
+              icon: Icons.event,
+              title: "Event Saya",
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const EventSayaPage()),
+                );
+              },
+            ),
+            _buildProfileOption(
+              icon: Icons.groups,
+              title: "Komunitas Saya",
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const KomunitasSayaPage()),
                 );
               },
             ),
