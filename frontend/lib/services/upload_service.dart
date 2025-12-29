@@ -1,17 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
+import 'api_client.dart';
 
 class UploadService {
   UploadService._();
   static final UploadService instance = UploadService._();
 
   final ImagePicker _picker = ImagePicker();
-  
-  // Freeimage.host API - completely free, no registration needed
-  static const String _apiKey = '6d207e02198a847aa98d0a2a901485a5';
-  static const String _uploadUrl = 'https://freeimage.host/api/1/upload';
 
   /// Pick image from gallery
   Future<XFile?> pickImage() async {
@@ -55,12 +53,36 @@ class UploadService {
     }
   }
 
-  /// Upload image to Freeimage.host (free, no registration)
+  /// Get MIME type from filename
+  MediaType _getMimeType(String filename) {
+    final ext = filename.split('.').last.toLowerCase();
+    switch (ext) {
+      case 'jpg':
+      case 'jpeg':
+        return MediaType('image', 'jpeg');
+      case 'png':
+        return MediaType('image', 'png');
+      case 'gif':
+        return MediaType('image', 'gif');
+      case 'webp':
+        return MediaType('image', 'webp');
+      default:
+        return MediaType('image', 'jpeg');
+    }
+  }
+
+  /// Upload image via backend (avoids CORS issues)
   Future<String> uploadImage(XFile file) async {
     debugPrint('[UploadService] ===== UPLOAD STARTED =====');
     debugPrint('[UploadService] File: ${file.name}');
     
     try {
+      // Get backend URL
+      final baseUrl = ApiClient.instance.baseUrl.replaceAll('/api', '');
+      final uploadUrl = '$baseUrl/api/upload';
+      debugPrint('[UploadService] Backend URL: $uploadUrl');
+
+      // Read file bytes
       final bytes = await file.readAsBytes();
       debugPrint('[UploadService] File size: ${bytes.length} bytes');
       
@@ -68,46 +90,52 @@ class UploadService {
         throw Exception('File is empty');
       }
 
-      // Convert to base64
-      final base64Image = base64Encode(bytes);
-      debugPrint('[UploadService] Base64 length: ${base64Image.length}');
-
-      // Upload to Freeimage.host
-      debugPrint('[UploadService] Uploading to Freeimage.host...');
+      // Create multipart request
+      final request = http.MultipartRequest('POST', Uri.parse(uploadUrl));
       
-      final response = await http.post(
-        Uri.parse(_uploadUrl),
-        body: {
-          'key': _apiKey,
-          'action': 'upload',
-          'source': base64Image,
-          'format': 'json',
-        },
-      ).timeout(
-        const Duration(seconds: 60),
+      // Add auth header if available
+      final token = ApiClient.instance.token;
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+
+      // Determine filename and content type
+      String filename = file.name;
+      if (!filename.contains('.')) {
+        filename = '$filename.jpg';
+      }
+      final mimeType = _getMimeType(filename);
+
+      // Add file to request
+      request.files.add(http.MultipartFile.fromBytes(
+        'image',
+        bytes,
+        filename: filename,
+        contentType: mimeType,
+      ));
+
+      debugPrint('[UploadService] Sending to backend...');
+
+      // Send request
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 90),
         onTimeout: () {
           throw Exception('Upload timeout');
         },
       );
 
+      final response = await http.Response.fromStream(streamedResponse);
       debugPrint('[UploadService] Response status: ${response.statusCode}');
-      
+      debugPrint('[UploadService] Response body: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        debugPrint('[UploadService] Response success: ${data['status_code']}');
-        
-        if (data['status_code'] == 200 && data['image'] != null) {
-          final imageUrl = data['image']['url'] as String;
-          debugPrint('[UploadService] ===== SUCCESS =====');
-          debugPrint('[UploadService] URL: $imageUrl');
-          return imageUrl;
-        } else {
-          final error = data['error']?['message'] ?? data['status_txt'] ?? 'Unknown error';
-          throw Exception('Freeimage error: $error');
-        }
+        final imageUrl = data['imageUrl'] as String;
+        debugPrint('[UploadService] ===== SUCCESS =====');
+        debugPrint('[UploadService] URL: $imageUrl');
+        return imageUrl;
       } else {
-        debugPrint('[UploadService] Error body: ${response.body}');
-        throw Exception('HTTP error: ${response.statusCode}');
+        throw Exception('Backend error ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
       debugPrint('[UploadService] ===== FAILED =====');
